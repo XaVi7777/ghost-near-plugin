@@ -1,8 +1,10 @@
 (() => {
+    const BOATLOAD_OF_GAS = Big(3).times(10 ** 13).toFixed();
+
     const onReadyHandler = () => {
         const { selectors, nearOptions, nearUtils, requestBody } = window;
 
-        let $signInSignOutBtn, $getAccountBalanceInput, $getAccountDetailsInput, $callMethod;
+        let $signInSignOutBtn, $getAccountBalanceInput, $getAccountDetailsInput, $callViewMethod;
 
         let isFetching = false;
 
@@ -79,8 +81,12 @@
                 connectNear();
             }
             $callMethod = $(nearUtils.createDataSelector('id', selectors.callMethod));
+            $callChangeMethod = $(nearUtils.createDataSelector('id', selectors.callChangeMethod));
             if ($callMethod.length) {
                 $callMethod.on('click', onCallMethodHandler)
+            }
+            if ($callChangeMethod.length) {
+                $callChangeMethod.on('click', onCallChangeMethodHandler)
             }
         }
 
@@ -118,16 +124,60 @@
             }
         }
 
-        const onCallMethodHandler = async ({ target }) => {
-            const data = $(target).data();
-            const { id } = data;
-            if (id === selectors.callMethod) {
-                const { name } = data;
-                try {
-                    await nearContract[name](requestBody[name]);
-                } catch (error) {
-                    console.error('Near request error', error)
+        const onCallViewMethodHandler = async ({ target }) => {
+            const { name } = $(target).data();
+            let value, inputName;
+            let args = {};
+            const $input = $(nearUtils.createDataSelector('id', `input-${name}`));
+            if ($input.length) {
+                inputName = $input.attr('name');
+                value = $input.val();
+                args[inputName] = value;
+            } else {
+                args = requestBody[name];
+            }
+            try {
+                const response = await nearContract[name](args);
+                const $view = $(nearUtils.createDataSelector('id', `view-${name}`));
+                if ($view.length) {
+                    $view.text(response);
                 }
+            } catch (error) {
+                console.error('Near request error', error)
+            }
+        }
+
+        const onCallMethodHandler = async ({ target }) => {
+            const { name, methodType } = $(target).data();
+
+            const isViewMethod = methodType === 'view';
+            let value, inputName;
+            let args = {};
+            const $input = $(nearUtils.createDataSelector('id', `input-${name}`));
+            if ($input.length) {
+                inputName = $input.attr('name');
+                value = $input.val();
+                args[inputName] = value;
+            } else {
+                args = requestBody[name];
+            }
+            try {
+                let response;
+                if (isViewMethod) {
+                    response = await nearContract[name](args);
+                } else {
+                    const $tokensToSend = $(nearUtils.createDataSelector('id', `${name}-${selectors.tokensToSend}`));
+                    if ($tokensToSend.length) {
+                        response = await nearContract[name](args, BOATLOAD_OF_GAS, Big($tokensToSend.val()).times(10 ** 24).toFixed());
+                    }
+                    response = await nearContract[name](args, BOATLOAD_OF_GAS);
+                }
+                const $view = $(nearUtils.createDataSelector('id', `view-${name}`));
+                if ($view.length) {
+                    $view.text(response);
+                }
+            } catch (error) {
+                console.error('Near request error', error)
             }
         }
 
